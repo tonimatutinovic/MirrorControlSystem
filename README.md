@@ -23,8 +23,10 @@ MirrorControlSystem/
 - Smooth servo movement with deltaX/deltaY
 - Servo boundaries enforced
 - Smooth movement to central position on switch press
+- Auto-sleep mode after inactivity (servo detach)
+- Wake-up on joystick movement or switch press
+- Serial state logging (ACTIVE / SLEEP)
 
 ## Next Steps
 
-- Implement auto-sleep for servos after inactivity
-- Wake-up logic on joystick movement or switch press
+- Integration with Python GUI for user profiles and position management

@@ -25,8 +25,15 @@ MirrorControlSystem/
 - Smooth movement to central position on switch press
 - Auto-sleep mode after inactivity (servo detach)
 - Wake-up on joystick movement or switch press
+- EEPROM persistence of last mirror position
+- Automatic position restore on power-up
 - Serial state logging (ACTIVE / SLEEP)
+
+## Current Status
+
+The firmware now supports non-volatile storage of the mirror position using EEPROM. The last valid position is automatically saved when the system enters auto-sleep and restored on the next power-up or reset.
 
 ## Next Steps
 
-- Integration with Python GUI for user profiles and position management
+- Add serial command interface (INIT / SAVE / DELETE)
+- Introduce external control (PC / Python GUI)

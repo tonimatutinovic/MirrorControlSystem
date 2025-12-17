@@ -1,3 +1,4 @@
+#include <EEPROM.h>
 #include <Servo.h>
 
 // Joystick pins
@@ -39,16 +40,19 @@ const float deltaX = 0.3;  // Positional shift (for smooth servo movements)
 // smoothing
 const float delta = 0.5;
 
+// Auto sleep functionality
 bool isActive = true;
 unsigned long lastMoveTime = 0;
 const unsigned long TIMEOUT = 10000;
-
 
 // delay
 int dt = 30;
 
 // central movement
 bool movingToCenter = false;
+
+const int ADDR_X = 0;
+const int ADDR_Y = sizeof(posX);
 
 // Function for getting joystick values
 void getJoystickValue() {
@@ -123,10 +127,14 @@ void moveToCentralPosition() {
 void checkActivity() {
     // ako je prošlo više od TIMEOUT i serva su aktivna → sleep
     if (isActive && millis() - lastMoveTime > TIMEOUT) {
+        EEPROM.put(ADDR_X, posX);
+        EEPROM.put(ADDR_Y, posY);
+
         xServo.detach();
         yServo.detach();
         isActive = false;
-        Serial.println("AUTO-SLEEP: servos detached");
+
+        Serial.println("AUTO-SLEEP: position saved, servos detached");
     }
 
     // ako su serva neaktivna, a joystick se pomakne ili switch pritisne → wake up
@@ -157,6 +165,24 @@ void setup() {
     lastMoveTime = millis();
 
     Serial.println("SYSTEM ACTIVE");
+
+    float storedX, storedY;
+
+    EEPROM.get(ADDR_X, storedX);
+    EEPROM.get(ADDR_Y, storedY);
+
+    if (isnan(storedX) || isnan(storedY)) {
+        posX = centralPosX;
+        posY = centralPosY;
+        EEPROM.put(ADDR_X, posX);
+        EEPROM.put(ADDR_Y, posY);
+        Serial.println("EEPROM INIT: default position");
+    } else {
+        posX = storedX;
+        posY = storedY;
+        Serial.println("EEPROM LOAD: position restored");
+    }
+
 }
 
 void loop() {

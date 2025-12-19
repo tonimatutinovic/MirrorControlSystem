@@ -1,16 +1,10 @@
 {
-    "users": [
-        {
-            "name": "Toni",
-            "posX": 20,
-            "posY": 40
-        }
-    ],
+    "users": [],
     "latest": [
         {
-            "name": "Toni",
-            "posX": 20,
-            "posY": 40
+            "name": "Default",
+            "posX": 20.0,
+            "posY": 40.0
         }
     ]
 }

@@ -10,8 +10,8 @@ const int SWITCH_PIN = 2;
 const int X_SERVO_PIN = 6;
 const int Y_SERVO_PIN = 5;
 
-Servo xServo;   // Servo moving mirrors on x-axis
-Servo yServo;   // Servo moving mirrors on y-axis
+Servo xServo; // Servo moving mirrors on x-axis
+Servo yServo; // Servo moving mirrors on y-axis
 
 // Joystick values
 int xVal, yVal, switchVal;
@@ -22,137 +22,168 @@ int yStaticMax = 550;
 int lastSwitch = 1;
 
 // y - axis servo
-float centralPosY = 40;  // Central position (moving 12.5 degrees in each direction)
+float centralPosY = 40; // Central position (moving 12.5 degrees in each direction)
 float posY = 40;
 // Boundaries
 const float minPosY = 27.5;
 const float maxPosY = 52.5;
-const float deltaY = 0.25;  // Positional shift (for smooth servo movements)
+const float deltaY = 0.25; // Positional shift (for smooth servo movements)
 
 // x - axis servo
-float centralPosX = 20;  // central position (moving 20 degrees in each direction)
+float centralPosX = 20; // central position (moving 20 degrees in each direction)
 float posX = 20;
 // Boundaries
 const float minPosX = 0;
 const float maxPosX = 40;
-const float deltaX = 0.3;  // Positional shift (for smooth servo movements)
+const float deltaX = 0.3; // Positional shift (for smooth servo movements)
 
 // smoothing
 const float delta = 0.5;
 
 // Auto sleep functionality
 bool isActive = true;
+bool moving = false;
+float targetX = 20, targetY = 40;
 unsigned long lastMoveTime = 0;
 const unsigned long TIMEOUT = 10000;
 
 // delay
 int dt = 30;
 
-// central movement
-bool movingToCenter = false;
-
 const int ADDR_X = 0;
 const int ADDR_Y = sizeof(posX);
 
 // Function for getting joystick values
-void getJoystickValue() {
+void getJoystickValue()
+{
     xVal = analogRead(X_PIN);
     yVal = analogRead(Y_PIN);
     switchVal = digitalRead(SWITCH_PIN);
 }
 
 // Function for updating servo positions
-void updateServo() {
-    if (movingToCenter) return;
+void updateServo()
+{
+    if (moving)
+        return;
 
     bool moved = false;
 
     // X-axis movement
-    if (xVal < xStaticMin) {
+    if (xVal < xStaticMin)
+    {
         posX -= deltaX;
         moved = true;
-    } else if (xVal > xStaticMax) {
+    }
+    else if (xVal > xStaticMax)
+    {
         posX += deltaX;
         moved = true;
     }
 
-    if (posX < minPosX) posX = minPosX;
-    if (posX > maxPosX) posX = maxPosX;
+    if (posX < minPosX)
+        posX = minPosX;
+    if (posX > maxPosX)
+        posX = maxPosX;
 
     // Y-axis movement
-    if (yVal < yStaticMin) {
+    if (yVal < yStaticMin)
+    {
         posY += deltaY;
         moved = true;
-    } else if (yVal > yStaticMax) {
+    }
+    else if (yVal > yStaticMax)
+    {
         posY -= deltaY;
         moved = true;
     }
 
-    if (posY < minPosY) posY = minPosY;
-    if (posY > maxPosY) posY = maxPosY;
+    if (posY < minPosY)
+        posY = minPosY;
+    if (posY > maxPosY)
+        posY = maxPosY;
 
-    if(moved){
+    if (moved)
+    {
         lastMoveTime = millis();
-    }
-
-}
-
-void moveToCentralPosition() {
-    if (!movingToCenter) return;
-
-    lastMoveTime = millis();
-
-    // X-axis
-    if (abs(posX - centralPosX) > delta) {
-        if (posX < centralPosX) posX += delta;
-        else posX -= delta;
-    } else {
-        posX = centralPosX;
-    }
-
-    // Y-axis
-    if (abs(posY - centralPosY) > delta) {
-        if (posY < centralPosY) posY += delta;
-        else posY -= delta;
-    } else {
-        posY = centralPosY;
-    }
-
-    // Check if reached center
-    if (posX == centralPosX && posY == centralPosY) {
-        movingToCenter = false;
+        Serial.print(posX);
+        Serial.print(" ");
+        Serial.println(posY);
     }
 }
 
-void checkActivity() {
+void moveToCentralPosition(float targetX, float targetY)
+{
+    if (!moving || !isActive)
+        return;
+
+    bool doneX = abs(posX - targetX) < 0.3;
+    bool doneY = abs(posY - targetY) < 0.3;
+
+    if (!doneX)
+    {
+        if (posX < targetX)
+            posX = posX + delta;
+        else if (posX > targetX)
+            posX = posX - delta;
+    }
+
+    if (!doneY)
+    {
+        if (posY < targetY)
+            posY = posY + delta;
+        else if (posY > targetY)
+            posY = posY - delta;
+    }
+
+    // Checking if values are crossing the boundaries
+    if (posX <= minPosX)
+        posX = minPosX;
+    else if (posX >= maxPosX)
+        posX = maxPosX;
+
+    if (posY <= minPosY)
+        posY = minPosY;
+    else if (posY >= maxPosY)
+        posY = maxPosY;
+
+    if (doneX && doneY)
+    {
+        posX = targetX;
+        posY = targetY;
+        Serial.print(posX);
+        Serial.print(" ");
+        Serial.println(posY);
+        moving = false;
+    }
+}
+
+void checkActivity()
+{
     // ako je prošlo više od TIMEOUT i serva su aktivna → sleep
-    if (isActive && millis() - lastMoveTime > TIMEOUT) {
-        EEPROM.put(ADDR_X, posX);
-        EEPROM.put(ADDR_Y, posY);
-
+    if (isActive && millis() - lastMoveTime > TIMEOUT)
+    {
         xServo.detach();
         yServo.detach();
         isActive = false;
-
-        Serial.println("AUTO-SLEEP: position saved, servos detached");
     }
 
     // ako su serva neaktivna, a joystick se pomakne ili switch pritisne → wake up
     if (!isActive &&
         (xVal < xStaticMin || xVal > xStaticMax ||
          yVal < yStaticMin || yVal > yStaticMax ||
-         switchVal == 0)) {
+         switchVal == 0))
+    {
 
         xServo.attach(X_SERVO_PIN);
         yServo.attach(Y_SERVO_PIN);
         isActive = true;
         lastMoveTime = millis();
-        Serial.println("WAKE-UP: servos attached");
     }
 }
 
-
-void setup() {
+void setup()
+{
     Serial.begin(115200);
 
     xServo.attach(X_SERVO_PIN);
@@ -162,44 +193,101 @@ void setup() {
     pinMode(Y_PIN, INPUT);
     pinMode(SWITCH_PIN, INPUT_PULLUP);
 
-    lastMoveTime = millis();
-
-    Serial.println("SYSTEM ACTIVE");
+    Serial.println("READY");
 
     float storedX, storedY;
 
     EEPROM.get(ADDR_X, storedX);
     EEPROM.get(ADDR_Y, storedY);
 
-    if (isnan(storedX) || isnan(storedY)) {
+    if (isnan(storedX) || isnan(storedY))
+    {
         posX = centralPosX;
         posY = centralPosY;
         EEPROM.put(ADDR_X, posX);
         EEPROM.put(ADDR_Y, posY);
-        Serial.println("EEPROM INIT: default position");
-    } else {
+    }
+    else
+    {
         posX = storedX;
         posY = storedY;
-        Serial.println("EEPROM LOAD: position restored");
     }
 
+    lastMoveTime = millis();
 }
 
-void loop() {
+void loop()
+{
+    if (Serial.available())
+    {
+        String cmd = Serial.readStringUntil('\n');
+        cmd.trim();
+        if (cmd.startsWith("INIT"))
+        {
+            if (cmd.length() == 4)
+            {
+                EEPROM.get(ADDR_X, posX);
+                EEPROM.get(ADDR_Y, posY);
+            }
+            else
+            {
+                // INIT posX posY → postavi iz poslanih vrijednosti
+                float x, y;
+                int space1 = cmd.indexOf(' ');
+                int space2 = cmd.indexOf(' ', space1 + 1);
+                x = cmd.substring(space1 + 1, space2).toFloat();
+                y = cmd.substring(space2 + 1).toFloat();
+                // posX = x;
+                // posY = y;
+                moving = true;
+                targetX = x;
+                targetY = y;
+            }
+            if (!isActive)
+            {
+                xServo.attach(X_SERVO_PIN);
+                yServo.attach(Y_SERVO_PIN);
+                isActive = true;
+            }
+            lastMoveTime = millis();
+        }
+
+        if (cmd.startsWith("DELETE"))
+        {
+            moving = true;
+            targetX = centralPosX;
+            targetY = centralPosY;
+            if (!isActive)
+            {
+                xServo.attach(X_SERVO_PIN);
+                yServo.attach(Y_SERVO_PIN);
+                isActive = true;
+            }
+            lastMoveTime = millis();
+        }
+        if (cmd.startsWith("SAVE"))
+        {
+            EEPROM.put(ADDR_X, posX);
+            EEPROM.put(ADDR_Y, posY);
+        }
+    }
+    // Getting joystick values
     getJoystickValue();
     checkActivity();
 
-    // Check for switch press
-    if (lastSwitch == 0 && switchVal == 1) {
-        movingToCenter = true;
-        lastMoveTime = millis();
+    // If joystick is clicked - mirror in central position
+    if (lastSwitch == 0 && switchVal == 1)
+    {
+        moving = true;
+        targetX = centralPosX;
+        targetY = centralPosY;
     }
-    lastSwitch = switchVal;
 
     updateServo();
-    moveToCentralPosition();
+    moveToCentralPosition(targetX, targetY);
 
-    if(isActive){
+    if (isActive)
+    {
         xServo.write(posX);
         yServo.write(posY);
     }

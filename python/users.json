@@ -1,0 +1,16 @@
+{
+    "users": [
+        {
+            "name": "Toni",
+            "posX": 20,
+            "posY": 40
+        }
+    ],
+    "latest": [
+        {
+            "name": "Toni",
+            "posX": 20,
+            "posY": 40
+        }
+    ]
+}

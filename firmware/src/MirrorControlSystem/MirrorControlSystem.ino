@@ -15,12 +15,12 @@ Servo yServo; // Servo moving mirrors on y-axis
 
 // Joystick values
 int xVal, yVal, switchVal;
-int xStaticMin = 500;
-int xStaticMax = 550;
-int yStaticMin = 510;
-int yStaticMax = 560;
+int xStaticMin = 470;
+int xStaticMax = 560;
+int yStaticMin = 500;
+int yStaticMax = 570;
 int lastSwitch = 1;
-unsigned long joystickUnlockTime = 300;
+unsigned long joystickUnlockTime = 0;
 
 // y - axis servo
 float centralPosY = 40; // Central position (moving 12.5 degrees in each direction)
@@ -39,7 +39,7 @@ const float maxPosX = 40;
 const float deltaX = 0.3; // Positional shift (for smooth servo movements)
 
 // smoothing
-const float delta = 0.5;
+const float delta = 0.4;
 
 // Auto sleep functionality
 bool isActive = true;
@@ -54,11 +54,21 @@ int dt = 30;
 const int ADDR_X = 0;
 const int ADDR_Y = sizeof(posX);
 
+int readAveragedAnalog(int pin, int samples = 8)
+{
+    long sum = 0;
+    for (int i = 0; i < samples; i++)
+    {
+        sum += analogRead(pin);
+    }
+    return sum / samples;
+}
+
 // Function for getting joystick values
 void getJoystickValue()
 {
-    xVal = analogRead(X_PIN);
-    yVal = analogRead(Y_PIN);
+    xVal = readAveragedAnalog(X_PIN);
+    yVal = readAveragedAnalog(Y_PIN);
     switchVal = digitalRead(SWITCH_PIN);
 }
 

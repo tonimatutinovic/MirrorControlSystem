@@ -3,22 +3,36 @@ import time
 import threading
 import json
 import tkinter as tk
-import os
 from tkinter import messagebox
 from enum import Enum
 
 arduino = None
 stop_thread = False
 
-# Varijabla da se zapamti prosli frame kod input frame-a
+# Variable used to remember the previous frame before opening the input frame
 lastFrame = 0
+
 class State(Enum):
     WELCOME = 0
     USER = 1
 
-# Dohvacam podatke iz json-a
-with open('./python/users.json', 'r', encoding='utf-8') as file:
+JSON_PATH = "./python/users.json"
+DEFAULT_POS_X = 20.0
+DEFAULT_POS_Y = 40.0
+
+def save_data():
+    with open(JSON_PATH, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=4)
+
+# Load data from JSON
+with open(JSON_PATH, 'r', encoding='utf-8') as file:
     data = json.load(file)
+
+if "users" not in data:
+    data["users"] = []
+
+if "latest" not in data or len(data["latest"]) == 0:
+    data["latest"] = [{"name": "Default", "posX": DEFAULT_POS_X, "posY": DEFAULT_POS_Y}]
 
 LastPosition = data['latest']
 lastUser = LastPosition[0]['name']
@@ -36,7 +50,7 @@ else:
 lastPosX = posX
 lastPosY = posY
 
-def connect_to_Arduino(port = 'COM4', baud = 115200):
+def connect_to_Arduino(port = 'COM11', baud = 115200):
     global arduino
     try:
         arduino = serial.Serial(port, baud, timeout=1)
@@ -50,13 +64,13 @@ def connect_to_Arduino(port = 'COM4', baud = 115200):
                 break
         if lastUser == "Default":
             command = 'INIT\n'
-            print("Dohvacam podatke s EEPROM-a")
+            print("Loading position from EEPROM")
         else:
             command = f'INIT {lastPosX} {lastPosY}\n'
-            print("Poslana pocetna pozicija")
+            print("Sending initial position")
         arduino.write(command.encode())
     except Exception as e:
-        print(f'Greska pri spajanju na Arduino: {e}')
+        print(f'Error while connecting to Arduino: {e}')
 
 def read_from_Arduino():
     global stop_thread, posX, posY
@@ -69,12 +83,13 @@ def read_from_Arduino():
                 x, y = dataPackage.split()
                 posX = float(x)
                 posY = float(y)
+                # Update in-memory state only
                 root.after(0, auto_update_position)
               except:
                   pass
             time.sleep(0.05)
     except Exception as e:
-        print(f'Greska u čitanju s Arduina: {e}')
+        print(f'Error while reading from Arduino: {e}')
 
 def on_close():
     global stop_thread
@@ -85,19 +100,34 @@ def on_close():
             arduino.write(command.encode())
             time.sleep(0.1)
     except Exception as e:
-        print(f'Greska pri slanju SAVE komande arduinu: {e}')
+        print(f'Error while sending SAVE command to Arduino: {e}')
+
+    # Save latest known state to JSON before closing
+    if ("latest" in data and len(data['latest']) > 0):
+        data["latest"][0]["name"] = currentUser
+        data["latest"][0]["posX"] = posX
+        data["latest"][0]["posY"] = posY
+    else:
+        data['latest'] = [{'name': currentUser, 'posX': posX, 'posY': posY}]
+
+    # If current user exists, update their stored position too
+    for user in data["users"]:
+        if user["name"] == currentUser:
+            user["posX"] = posX
+            user["posY"] = posY
+            break
+
+    save_data()
     root.destroy()
-
-# Spremanje zadnje pozicije
-if ("latest" in data and len(data['latest']) > 0):
-    data['latest'][0]['posX'] = lastPosX
-    data['latest'][0]['posY'] = lastPosY
-else:
-    data['latest'] = [{'name': "Default", 'posX': posX, 'posY': posY}]
-
-with open('./python/users.json', 'w', encoding='utf-8') as file:
-    json.dump(data, file, indent=4)
         
+# Initialize latest position once at startup
+if "latest" in data and len(data["latest"]) > 0:
+    data["latest"][0]["posX"] = lastPosX
+    data["latest"][0]["posY"] = lastPosY
+else:
+    data["latest"] = [{"name": "Default", "posX": posX, "posY": posY}]
+
+save_data()
 
 def ShowWelcomeFrame():
     WelcomeFrame.tkraise()
@@ -108,14 +138,13 @@ def ShowInputFrame():
     InputFrame.tkraise()
 
 def ShowUserFrame():
-    global currentUser
+    global currentUser, lastFrame
     if(currentUser == "Default"):
         ShowWelcomeFrame()
     else:
         UserFrame.tkraise()
         UserLabel.config(text="User: " + currentUser)
         RefreshUserSwitchMenu()
-        global lastFrame
         lastFrame = State.USER
 
 def ShowFrame(lFrame):
@@ -136,18 +165,18 @@ def SavePosition():
     global posX
     global posY
     global currentUser, names, numberOfUsers, data
-    name = InputEntry.get()
+    name = InputEntry.get().strip()
+    if not name:
+        return
     user = {
             "name": name,
             "posX": posX,
             "posY": posY
         }
-    with open('./python/users.json', 'r', encoding='utf-8') as file:
-        data = json.load(file)
     
     userExists = False
-    for users in data['users']:
-        if(name == users['name']):
+    for existingUser in data['users']:
+        if(name == existingUser['name']):
             userExists = True
             break
 
@@ -160,7 +189,7 @@ def SavePosition():
         data['latest'][0]['posX'] = posX
         data['latest'][0]['posY'] = posY
         currentUser = name
-        # Ako ima korisnika
+
         if numberOfUsers > 0:
             SavePositionButton.grid(row=1, column=0, columnspan=1, pady=40)
             SelectUserDM.grid(row=1, column=1, pady=40)
@@ -172,35 +201,28 @@ def SavePosition():
         ShowUserFrame()
         numberOfUsers += 1
 
-    names = []
-    for u in data["users"]:
-        names.append(u["name"])
+    names = [u["name"] for u in data["users"]] if len(data["users"]) > 0 else ["No users available"]
     RefreshDropdown()
-
-    with open('./python/users.json', 'w', encoding='utf-8') as file:
-        json.dump(data, file, indent=4)
+    save_data()
     InputEntry.delete(0, tk.END)
 
 def auto_update_position():
     global currentUser, posX, posY, data
 
+    # Update current user position in memory only   
     for user in data['users']:
         if user['name'] == currentUser:
             user['posX'] = posX
             user['posY'] = posY
             break
+
+    # Update latest position in memory only 
     data['latest'][0]['posX'] = posX
     data['latest'][0]['posY'] = posY
 
-    with open('./python/users.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
-
 
 def DeletePosition():
-    global currentUser, names, numberOfUsers, data
-
-    with open('./python/users.json', 'r', encoding='utf-8') as file:
-        data = json.load(file)
+    global currentUser, names, numberOfUsers, data, posX, posY
     
     newUsers = []
     for user in data['users']:
@@ -211,15 +233,17 @@ def DeletePosition():
 
     if data["latest"] and data["latest"][0]["name"] == currentUser:
             data["latest"][0]["name"] = "Default"
-            data["latest"][0]["posX"] = 20
-            data["latest"][0]["posY"] = 40
+            data["latest"][0]["posX"] = DEFAULT_POS_X
+            data["latest"][0]["posY"] = DEFAULT_POS_Y
 
-    command = f'DELETE\n'
-    arduino.write(command.encode())
+    posX = DEFAULT_POS_X
+    posY = DEFAULT_POS_Y
 
-    with open('./python/users.json', 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
-    
+    if arduino:
+        command = f'DELETE\n'
+        arduino.write(command.encode())
+
+    save_data()
     
     numberOfUsers = len(data['users'])
     if numberOfUsers > 0:
@@ -229,7 +253,7 @@ def DeletePosition():
 
     RefreshDropdown()
     currentUser = "Default"
-    # Ako ima korisnika
+    
     if numberOfUsers > 0:
         SavePositionButton.grid(row=1, column=0, columnspan=1, pady=40)
         SelectUserDM.grid(row=1, column=1, pady=40)
@@ -238,16 +262,18 @@ def DeletePosition():
         SelectUserDM.grid_forget()
         SelectUserButton.grid_forget()
         SavePositionButton.grid(row=1, column=0, columnspan=3, pady=40)
+
     ShowWelcomeFrame()
 
 def SwitchUser(newUser):
     global currentUser, data, posX, posY
+
     if newUser == currentUser:
         return
 
     currentUser = newUser
 
-    # Dohvati pozicije novog korisnika
+    # Load selected user's stored position
     for user in data['users']:
         if user['name'] == newUser:
             posX = user['posX']
@@ -265,17 +291,13 @@ def SwitchUser(newUser):
         time.sleep(0.05)
         arduino.write(command.encode())
 
-    # Spremi promjenu u JSON
-    with open('./python/users.json', 'w', encoding='utf-8') as file:
-        json.dump(data, file, indent=4)
+    save_data()
 
     UserLabel.config(text="User: " + currentUser)
     RefreshUserSwitchMenu()
 
 
-
 def on_option_change(*args):
-    # Ako je default vrijednost, gumb je disabled
     if clicked.get() == "Log in as:":
         SelectUserButton.config(state="disabled")
     else:
@@ -291,17 +313,16 @@ def check_entry(*args):
 def RefreshDropdown():
     global names
     menu = SelectUserDM["menu"]
-    menu.delete(0, "end")  # Obriši stare opcije
+    menu.delete(0, "end")  # Delete old options
     
-    # Dodaj nove opcije iz liste names
+    # Add new options from names list
     for name in names:
         menu.add_command(
             label=name,
             command=lambda value=name: clicked.set(value)
         )
     
-    # Resetiraj prikaz
-    if names:
+    if names and names[0] != "No users available":
         clicked.set("Log in as:")
     else:
         clicked.set("No users available")
@@ -340,10 +361,6 @@ def on_user_switch_change(*args):
     else:
         SwitchUserButton.config(state="disabled")
 
-
-# Ne triba
-def show():
-    print("User", clicked.get(), "selected!")
 
 # root prozor
 root = tk.Tk()
@@ -397,7 +414,6 @@ InputFrame.grid_rowconfigure(0, weight=1)
 InputFrame.grid_rowconfigure(1, weight=1)
 InputFrame.grid_rowconfigure(2, weight=1)
 
-
 EnterNameLabel = tk.Label(InputFrame, text="Enter your name", font=("Arial", 16), pady=30)
 EnterNameLabel.grid(row=0, column=0, columnspan=2)
 entry_var = tk.StringVar()
@@ -421,7 +437,6 @@ UserFrame.grid_rowconfigure(0, weight=1)
 UserFrame.grid_rowconfigure(1, weight=1)
 UserFrame.grid_rowconfigure(2, weight=1)
 UserFrame.grid_rowconfigure(3, weight=1)
-
 
 UserLabel = tk.Label(UserFrame, text="User: ", font=("Arial", 16), pady=30)
 UserLabel.grid(row=0, column=0, columnspan=3)

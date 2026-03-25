@@ -15,11 +15,12 @@ Servo yServo; // Servo moving mirrors on y-axis
 
 // Joystick values
 int xVal, yVal, switchVal;
-int xStaticMin = 510;
-int xStaticMax = 540;
-int yStaticMin = 520;
-int yStaticMax = 550;
+int xStaticMin = 500;
+int xStaticMax = 550;
+int yStaticMin = 510;
+int yStaticMax = 560;
 int lastSwitch = 1;
+unsigned long joystickUnlockTime = 300;
 
 // y - axis servo
 float centralPosY = 40; // Central position (moving 12.5 degrees in each direction)
@@ -64,7 +65,7 @@ void getJoystickValue()
 // Function for updating servo positions
 void updateServo()
 {
-    if (moving)
+    if (moving || millis() < joystickUnlockTime)
         return;
 
     bool moved = false;
@@ -112,40 +113,61 @@ void updateServo()
     }
 }
 
-void moveToCentralPosition(float targetX, float targetY)
+void moveToTarget(float targetX, float targetY)
 {
     if (!moving || !isActive)
         return;
 
-    bool doneX = abs(posX - targetX) < 0.3;
-    bool doneY = abs(posY - targetY) < 0.3;
+    bool doneX = false;
+    bool doneY = false;
 
-    if (!doneX)
+    // Move X towards target
+    if (fabs(posX - targetX) <= delta)
     {
-        if (posX < targetX)
-            posX = posX + delta;
-        else if (posX > targetX)
-            posX = posX - delta;
+        posX = targetX;
+        doneX = true;
+    }
+    else if (posX < targetX)
+    {
+        posX += delta;
+    }
+    else
+    {
+        posX -= delta;
     }
 
-    if (!doneY)
+    // Move Y towards target
+    if (fabs(posY - targetY) <= delta)
     {
-        if (posY < targetY)
-            posY = posY + delta;
-        else if (posY > targetY)
-            posY = posY - delta;
+        posY = targetY;
+        doneY = true;
+    }
+    else if (posY < targetY)
+    {
+        posY += delta;
+    }
+    else
+    {
+        posY -= delta;
     }
 
-    // Checking if values are crossing the boundaries
-    if (posX <= minPosX)
+    // Clamp to valid range
+    if (posX < minPosX)
         posX = minPosX;
-    else if (posX >= maxPosX)
+    if (posX > maxPosX)
         posX = maxPosX;
-
-    if (posY <= minPosY)
+    if (posY < minPosY)
         posY = minPosY;
-    else if (posY >= maxPosY)
+    if (posY > maxPosY)
         posY = maxPosY;
+
+    // Keep system awake while moving
+    lastMoveTime = millis();
+
+    // Send updated position
+    Serial.print(posX);
+    Serial.print(" ");
+    Serial.println(posY);
 
     if (doneX && doneY)
     {
@@ -155,6 +177,7 @@ void moveToCentralPosition(float targetX, float targetY)
         Serial.print(" ");
         Serial.println(posY);
         moving = false;
+        joystickUnlockTime = millis() + 300;
     }
 }
 
@@ -276,7 +299,7 @@ void loop()
     checkActivity();
 
     // If joystick is clicked - mirror in central position
-    if (lastSwitch == 0 && switchVal == 1)
+    if (lastSwitch == 1 && switchVal == 0)
     {
         moving = true;
         targetX = centralPosX;
@@ -284,7 +307,7 @@ void loop()
     }
 
     updateServo();
-    moveToCentralPosition(targetX, targetY);
+    moveToTarget(targetX, targetY);
 
     if (isActive)
     {
@@ -292,5 +315,6 @@ void loop()
         yServo.write(posY);
     }
 
+    lastSwitch = switchVal;
     delay(dt);
 }

@@ -2,7 +2,7 @@
 #include <Servo.h>
 
 // Joystick pins
-const int X_PIN = A0;
+const int X_PIN = A2;
 const int Y_PIN = A1;
 const int SWITCH_PIN = 2;
 
@@ -15,10 +15,10 @@ Servo yServo; // Servo moving mirrors on y-axis
 
 // Joystick values
 int xVal, yVal, switchVal;
-int xStaticMin = 470;
-int xStaticMax = 560;
-int yStaticMin = 500;
-int yStaticMax = 570;
+int xStaticMin = 440;
+int xStaticMax = 550;
+int yStaticMin = 510;
+int yStaticMax = 560;
 int lastSwitch = 1;
 unsigned long joystickUnlockTime = 0;
 
@@ -39,7 +39,7 @@ const float maxPosX = 40;
 const float deltaX = 0.3; // Positional shift (for smooth servo movements)
 
 // smoothing
-const float delta = 0.4;
+const float delta = 0.5;
 
 // Auto sleep functionality
 bool isActive = true;
@@ -54,7 +54,7 @@ int dt = 30;
 const int ADDR_X = 0;
 const int ADDR_Y = sizeof(posX);
 
-int readAveragedAnalog(int pin, int samples = 8)
+int readAveragedAnalog(int pin, int samples = 12)
 {
     long sum = 0;
     for (int i = 0; i < samples; i++)

@@ -33,6 +33,8 @@ MirrorControlSystem/
 ├── python/
 │   ├── mirrorGUI.py
 │   └── users.json
+├── images/
+│   └── wiring.png
 ├── LICENSE
 └── README.md
 ```
@@ -64,6 +66,15 @@ MirrorControlSystem/
 ---
 
 ## Hardware Setup
+
+### Wiring Diagram
+
+![Wiring Diagram](images/wiring.png)
+
+**Note:**
+- Servos are powered from an external battery pack
+- Arduino, servos and joystick share a common ground
+- Joystick is powered directly from the Arduino
 
 ### Components
 

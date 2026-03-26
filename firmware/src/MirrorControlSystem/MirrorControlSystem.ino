@@ -2,8 +2,8 @@
 #include <Servo.h>
 
 // Joystick pins
-const int X_PIN = A2;
-const int Y_PIN = A1;
+const int X_PIN = A1;
+const int Y_PIN = A2;
 const int SWITCH_PIN = 2;
 
 // Servo pins

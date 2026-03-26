@@ -350,8 +350,8 @@ def RefreshUserSwitchMenu():
     SwitchUserButton.config(state="disabled")
 
     # Pokaži elemente
-    UserSwitchMenu.grid(row=1, column=0, pady=(0,10))
-    SwitchUserButton.grid(row=1, column=1, pady=(0,10))
+    UserSwitchMenu.grid(row=1, column=0, columnspan=2, pady=(0,10))
+    SwitchUserButton.grid(row=1, column=2, pady=(0,10))
 
 
 # Aktiviraj gumb kad se promijeni izbor
@@ -364,7 +364,7 @@ def on_user_switch_change(*args):
 
 # root prozor
 root = tk.Tk()
-root.title("Smart Mirror Control System")
+root.title("Mirror Control System")
 root.geometry("400x300")
 root.columnconfigure(0, weight=1)
 root.rowconfigure(0, weight=1)
@@ -419,7 +419,7 @@ EnterNameLabel.grid(row=0, column=0, columnspan=2)
 entry_var = tk.StringVar()
 entry_var.trace_add("write", check_entry)   # Vežemo funkciju na promjenu vrijednosti StringVar-a
 InputEntry = tk.Entry(InputFrame, textvariable=entry_var)
-InputEntry.grid(row=1, column=0, pady=40)
+InputEntry.grid(row=1, column=0, columnspan=2, pady=40)
 SaveButton = tk.Button(InputFrame, text="Save", command= SavePosition, state="disabled")
 SaveButton.grid(row=1, column=1, pady=40)
 CancelButton = tk.Button(InputFrame, text="Cancel", command=lambda: ShowFrame(lastFrame))
@@ -446,11 +446,11 @@ userSwitchVar.trace_add("write", on_user_switch_change)
 UserSwitchMenu = tk.OptionMenu(UserFrame, userSwitchVar, ())
 SwitchUserButton = tk.Button(UserFrame, text="Switch", state="disabled", command=lambda: SwitchUser(userSwitchVar.get()))
 NewUserButton = tk.Button(UserFrame, text="New user", command=ShowInputFrame)
-NewUserButton.grid(row=2, column=0, padx=10, pady=20)
+NewUserButton.grid(row=2, column=0, columnspan=2, padx=10, pady=20)
 DeletePositionButton = tk.Button(UserFrame, text="Delete position", command= DeletePosition)
-DeletePositionButton.grid(row=2, column=1, padx=10, pady=20)
+DeletePositionButton.grid(row=2, column=2, padx=10, pady=20)
 ExitButton = tk.Button(UserFrame, text="EXIT", command=on_close)
-ExitButton.grid(row=3, column=0, columnspan=2, pady=30)
+ExitButton.grid(row=3, column=0, columnspan=3, pady=30)
 
 UserFrame.grid(row=0, column=0, sticky="nsew")
 

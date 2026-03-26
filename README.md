@@ -69,7 +69,11 @@ MirrorControlSystem/
 
 ### Wiring Diagram
 
-![Wiring Diagram](images/wiring.png)
+<p align="center">
+  <img src="images/wiring.png" width="600"/>
+  <br>
+  <em>Figure 1: System wiring diagram</em>
+</p>
 
 **Note:**
 - Servos are powered from an external battery pack

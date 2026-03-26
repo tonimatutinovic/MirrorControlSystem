@@ -34,7 +34,9 @@ MirrorControlSystem/
 │   ├── mirrorGUI.py
 │   └── users.json
 ├── images/
-│   └── wiring.png
+│   ├── wiring.png
+│   ├── hardware.jpg
+│   └── gui.png
 ├── LICENSE
 └── README.md
 ```
@@ -207,6 +209,30 @@ Servos are detached after a period of inactivity to:
 - Implement automatic joystick calibration at startup
 - Migrate firmware to STM32 platform for better performance and control
 - Design custom PCB for improved reliability and integration
+
+---
+
+## Demo
+
+### Hardware
+
+<p align="center">
+  <img src="images/hardware.jpg" width="500"/>
+</p>
+
+### GUI
+
+<p align="center">
+  <img src="images/gui.png" width="350"/>
+</p>
+
+### Video Demo
+
+
+
+The video demonstrates full system functionality including user creation, position control, switching between users, and position reset. 
+
+[▶ Watch Demo](https://youtu.be/jPrD__qjtxk)
 
 ---
 

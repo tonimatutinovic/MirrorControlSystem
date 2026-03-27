@@ -1,8 +1,8 @@
-# MirrorControlSystem
+# Mirror Control System
 
 ## Project Overview
 
-MirrorControlSystem is an embedded system for controlling a mirror (or similar device) using a joystick and servo motors. The system combines real-time embedded control with a desktop GUI, enabling both manual and software-driven positioning.
+Mirror Control System is an embedded system for controlling a mirror (or similar device) using a joystick and servo motors. The system combines real-time embedded control with a desktop GUI, enabling both manual and software-driven positioning.
 
 The Arduino firmware processes joystick input, applies filtering and dead-zone logic, and controls servo movement.  
 A Python GUI communicates with the system over serial, allowing user-based position management and persistent storage.
@@ -25,7 +25,7 @@ Joystick → Arduino → Servo Motors
 ## Folder Structure
 
 ```
-MirrorControlSystem/
+mirror-control-system/
 ├── firmware/
 │   └── src/
 │       └── MirrorControlSystem/

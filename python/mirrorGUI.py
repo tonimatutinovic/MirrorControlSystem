@@ -9,7 +9,7 @@ from enum import Enum
 arduino = None
 stop_thread = False
 
-# Variable used to remember the previous frame before opening the input frame
+# Used to remember the previously active frame before opening the input frame
 lastFrame = 0
 
 class State(Enum):
@@ -20,27 +20,31 @@ JSON_PATH = "./python/users.json"
 DEFAULT_POS_X = 20.0
 DEFAULT_POS_Y = 40.0
 
+# Saves the current in-memory user data to the JSON file
 def save_data():
     with open(JSON_PATH, "w", encoding="utf-8") as file:
         json.dump(data, file, indent=4)
 
-# Load data from JSON
+# Load persistent user data from JSON
 with open(JSON_PATH, 'r', encoding='utf-8') as file:
     data = json.load(file)
 
+# Ensure required JSON fields exist
 if "users" not in data:
     data["users"] = []
 
 if "latest" not in data or len(data["latest"]) == 0:
     data["latest"] = [{"name": "Default", "posX": DEFAULT_POS_X, "posY": DEFAULT_POS_Y}]
 
+# Load last known position and user state
 LastPosition = data['latest']
 lastUser = LastPosition[0]['name']
 posX = LastPosition[0]['posX']
 posY = LastPosition[0]['posY']
 
 currentUser = lastUser
-    
+
+# Prepare user list for dropdown menus 
 numberOfUsers = len(data['users'])
 if numberOfUsers > 0:
     names = [user["name"] for user in data['users']]
@@ -50,6 +54,10 @@ else:
 lastPosX = posX
 lastPosY = posY
 
+''' 
+    Establishes serial communication with the Arduino and sends the initial
+    mirror position command once the firmware reports readiness
+'''
 def connect_to_Arduino(port = 'COM11', baud = 115200):
     global arduino
     try:
@@ -72,6 +80,10 @@ def connect_to_Arduino(port = 'COM11', baud = 115200):
     except Exception as e:
         print(f'Error while connecting to Arduino: {e}')
 
+'''
+    Background thread that continuously reads position updates from Arduino.
+    Received values are stored in memory and applied safely to the GUI thread.
+'''
 def read_from_Arduino():
     global stop_thread, posX, posY
     try:
@@ -83,7 +95,7 @@ def read_from_Arduino():
                 x, y = dataPackage.split()
                 posX = float(x)
                 posY = float(y)
-                # Update in-memory state only
+                # Update application state on the Tkinter main thread
                 root.after(0, auto_update_position)
               except:
                   pass
@@ -91,6 +103,12 @@ def read_from_Arduino():
     except Exception as e:
         print(f'Error while reading from Arduino: {e}')
 
+"""
+    Handles application shutdown:
+    - stops background serial reading
+    - sends SAVE command to Arduino
+    - updates latest known position in JSON
+"""
 def on_close():
     global stop_thread
     stop_thread = True
@@ -102,7 +120,7 @@ def on_close():
     except Exception as e:
         print(f'Error while sending SAVE command to Arduino: {e}')
 
-    # Save latest known state to JSON before closing
+    # Store latest known position before closing
     if ("latest" in data and len(data['latest']) > 0):
         data["latest"][0]["name"] = currentUser
         data["latest"][0]["posX"] = posX
@@ -110,7 +128,7 @@ def on_close():
     else:
         data['latest'] = [{'name': currentUser, 'posX': posX, 'posY': posY}]
 
-    # If current user exists, update their stored position too
+    # Update current user's stored position as well
     for user in data["users"]:
         if user["name"] == currentUser:
             user["posX"] = posX
@@ -129,14 +147,20 @@ else:
 
 save_data()
 
+# Displays the welcome screen
 def ShowWelcomeFrame():
     WelcomeFrame.tkraise()
     global lastFrame
     lastFrame = State.WELCOME
 
+# Displays the user creation screen
 def ShowInputFrame():
     InputFrame.tkraise()
 
+"""
+    Displays the user screen if a valid user is selected.
+    Otherwise, falls back to the welcome screen.
+"""
 def ShowUserFrame():
     global currentUser, lastFrame
     if(currentUser == "Default"):
@@ -147,6 +171,7 @@ def ShowUserFrame():
         RefreshUserSwitchMenu()
         lastFrame = State.USER
 
+# Restores the previously active frame and clears the input field
 def ShowFrame(lFrame):
     if(lFrame == State.WELCOME):
         ShowWelcomeFrame()
@@ -154,13 +179,17 @@ def ShowFrame(lFrame):
         ShowUserFrame()
     InputEntry.delete(0, tk.END)
 
+# Loads the selected user from the welcome screen dropdown
 def SelectUser():
     name = clicked.get()
     if name != "No users available" and name != "Log in as:":
         SwitchUser(name)
     ShowUserFrame()
 
-
+"""
+    Creates a new user using the current mirror position and saves it to JSON.
+    Prevents duplicate usernames.
+"""
 def SavePosition():
     global posX
     global posY
@@ -190,6 +219,7 @@ def SavePosition():
         data['latest'][0]['posY'] = posY
         currentUser = name
 
+        # Update welcome screen layout depending on whether users exist
         if numberOfUsers > 0:
             SavePositionButton.grid(row=1, column=0, columnspan=1, pady=40)
             SelectUserDM.grid(row=1, column=1, pady=40)
@@ -206,21 +236,28 @@ def SavePosition():
     save_data()
     InputEntry.delete(0, tk.END)
 
+"""
+    Updates in-memory position values after receiving new coordinates
+    from Arduino. This avoids excessive JSON writes during motion.
+"""
 def auto_update_position():
     global currentUser, posX, posY, data
 
-    # Update current user position in memory only   
+    # Update current user's position in memory   
     for user in data['users']:
         if user['name'] == currentUser:
             user['posX'] = posX
             user['posY'] = posY
             break
 
-    # Update latest position in memory only 
+    # Update latest known position in memory 
     data['latest'][0]['posX'] = posX
     data['latest'][0]['posY'] = posY
 
-
+"""
+    Deletes the currently selected user and resets the system
+    to the default central mirror position.
+"""
 def DeletePosition():
     global currentUser, names, numberOfUsers, data, posX, posY
     
@@ -254,6 +291,7 @@ def DeletePosition():
     RefreshDropdown()
     currentUser = "Default"
     
+    # Update welcome screen layout depending on whether users remain
     if numberOfUsers > 0:
         SavePositionButton.grid(row=1, column=0, columnspan=1, pady=40)
         SelectUserDM.grid(row=1, column=1, pady=40)
@@ -265,6 +303,10 @@ def DeletePosition():
 
     ShowWelcomeFrame()
 
+"""
+    Switches to another saved user profile, updates the current position,
+    and sends the corresponding target position to Arduino.
+"""
 def SwitchUser(newUser):
     global currentUser, data, posX, posY
 
@@ -284,7 +326,6 @@ def SwitchUser(newUser):
     data['latest'][0]['posX'] = posX
     data['latest'][0]['posY'] = posY
 
-    # Pošalji Arduino-u INIT komandu s tim vrijednostima
     if arduino:
         command = f"INIT {posX} {posY}\n"
         print(f"[Python ➡ Arduino] {command.strip()}")
@@ -296,13 +337,14 @@ def SwitchUser(newUser):
     UserLabel.config(text="User: " + currentUser)
     RefreshUserSwitchMenu()
 
-
+# Enables the Select button only when a valid user is chosen
 def on_option_change(*args):
     if clicked.get() == "Log in as:":
         SelectUserButton.config(state="disabled")
     else:
         SelectUserButton.config(state="normal")
 
+# Enables the Save button only when the input field is not empty
 def check_entry(*args):
     text = entry_var.get().strip()
     if text:
@@ -310,12 +352,12 @@ def check_entry(*args):
     else:
         SaveButton.config(state="disabled")
 
+# Refreshes the user selection dropdown on the welcome screen
 def RefreshDropdown():
     global names
     menu = SelectUserDM["menu"]
-    menu.delete(0, "end")  # Delete old options
+    menu.delete(0, "end")
     
-    # Add new options from names list
     for name in names:
         menu.add_command(
             label=name,
@@ -328,33 +370,33 @@ def RefreshDropdown():
         clicked.set("No users available")
         SelectUserButton.config(state="disabled")
 
+"""
+    Refreshes the user switch dropdown inside the user screen
+    and hides it when no alternative users exist.
+"""
 def RefreshUserSwitchMenu():
     global names, currentUser
     menu = UserSwitchMenu["menu"]
     menu.delete(0, "end")
     
-    # Filtriraj listu korisnika – izbaci "No users available" i trenutnog korisnika
     valid_users = [name for name in names if name not in ("No users available", currentUser)]
 
-    # Ako nema drugih korisnika, sakrij dropdown i gumb
     if len(valid_users) == 0:
         UserSwitchMenu.grid_forget()
         SwitchUserButton.grid_forget()
         return
 
-    # Inače, napuni meni
     for name in valid_users:
         menu.add_command(label=name, command=lambda value=name: userSwitchVar.set(value))
     
     userSwitchVar.set("Switch to user:")
     SwitchUserButton.config(state="disabled")
 
-    # Pokaži elemente
     UserSwitchMenu.grid(row=1, column=0, columnspan=2, pady=(0,10))
     SwitchUserButton.grid(row=1, column=2, pady=(0,10))
 
 
-# Aktiviraj gumb kad se promijeni izbor
+# Enables the switch button only when a valid user is selected
 def on_user_switch_change(*args):
     if userSwitchVar.get() != "Switch to user:":
         SwitchUserButton.config(state="normal")
@@ -362,17 +404,15 @@ def on_user_switch_change(*args):
         SwitchUserButton.config(state="disabled")
 
 
-# root prozor
+# Main application window
 root = tk.Tk()
 root.title("Mirror Control System")
 root.geometry("400x300")
 root.columnconfigure(0, weight=1)
 root.rowconfigure(0, weight=1)
-# presretanje X buttona
 root.protocol("WM_DELETE_WINDOW", on_close)
 
-
-# Welcome frame - no user selected
+# Welcome frame
 WelcomeFrame = tk.Frame(root)
 WelcomeFrame.grid_columnconfigure(0, weight=1)
 WelcomeFrame.grid_columnconfigure(1, weight=1)
@@ -380,7 +420,6 @@ WelcomeFrame.grid_columnconfigure(2, weight=1)
 WelcomeFrame.grid_rowconfigure(0, weight=1)
 WelcomeFrame.grid_rowconfigure(1, weight=1)
 WelcomeFrame.grid_rowconfigure(2, weight=1)
-
 
 WelcomeLabel = tk.Label(WelcomeFrame, text="Wellcome", font=("Arial", 16), pady=30)
 WelcomeLabel.grid(row=0, column=0, columnspan=3)
@@ -390,7 +429,7 @@ clicked.trace_add("write", on_option_change)    # Vežemo funkciju na promjenu v
 SelectUserDM = tk.OptionMenu(WelcomeFrame, clicked, *names) 
 SelectUserButton = tk.Button(WelcomeFrame, text="Select", command= SelectUser, state="disabled")
 
-# Ako ima korisnika
+# # Configure welcome screen depending on whether users already exist
 if numberOfUsers > 0:
     SavePositionButton.grid(row=1, column=0, columnspan=1, pady=40)
     SelectUserDM.grid(row=1, column=1, pady=40)
@@ -427,8 +466,7 @@ CancelButton.grid(row=2, column=0, columnspan=2, pady=30)
 
 InputFrame.grid(row=0, column=0, sticky="nsew")
 
-
-# User frame - user selected
+# User frame
 UserFrame = tk.Frame(root)
 UserFrame.grid_columnconfigure(0, weight=1)
 UserFrame.grid_columnconfigure(1, weight=1)
@@ -440,7 +478,7 @@ UserFrame.grid_rowconfigure(3, weight=1)
 
 UserLabel = tk.Label(UserFrame, text="User: ", font=("Arial", 16), pady=30)
 UserLabel.grid(row=0, column=0, columnspan=3)
-# Dropdown za promjenu korisnika unutar UserFrame-a
+# Dropdown used to switch between existing users
 userSwitchVar = tk.StringVar(value="Switch to user:")
 userSwitchVar.trace_add("write", on_user_switch_change)
 UserSwitchMenu = tk.OptionMenu(UserFrame, userSwitchVar, ())
@@ -454,15 +492,16 @@ ExitButton.grid(row=3, column=0, columnspan=3, pady=30)
 
 UserFrame.grid(row=0, column=0, sticky="nsew")
 
-
-
-# Ako nema korisnika
+# Show initial frame based on the last active user
 if currentUser == "Default":
     ShowWelcomeFrame()
 else:
     ShowUserFrame()
 
+# Start serial communication and background reading thread
 connect_to_Arduino()
 thread = threading.Thread(target=read_from_Arduino, daemon=True)
 thread.start()
+
+# Start the Tkinter event loop
 root.mainloop()    

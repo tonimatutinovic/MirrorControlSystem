@@ -1,59 +1,73 @@
 #include <EEPROM.h>
 #include <Servo.h>
 
-// Joystick pins
+// Joystick input pins
 const int X_PIN = A1;
 const int Y_PIN = A2;
 const int SWITCH_PIN = 2;
 
-// Servo pins
+// Servo control pins
 const int X_SERVO_PIN = 6;
 const int Y_SERVO_PIN = 5;
 
-Servo xServo; // Servo moving mirrors on x-axis
-Servo yServo; // Servo moving mirrors on y-axis
+// Servo objects for X and Y mirror movement
+Servo xServo;
+Servo yServo;
 
-// Joystick values
+// Current joystick readings
 int xVal, yVal, switchVal;
+
+// Current joystick readings
 int xStaticMin = 440;
 int xStaticMax = 550;
 int yStaticMin = 510;
 int yStaticMax = 560;
 int lastSwitch = 1;
+
+// Temporary lock that prevents joystick input immediately after automatic movement
 unsigned long joystickUnlockTime = 0;
 
-// y - axis servo
-float centralPosY = 40; // Central position (moving 12.5 degrees in each direction)
+// Y-axis servo configuration
+const float centralPosY = 40; // Central position (moving 12.5 degrees in each direction)
 float posY = 40;
 // Boundaries
 const float minPosY = 27.5;
 const float maxPosY = 52.5;
 const float deltaY = 0.25; // Positional shift (for smooth servo movements)
 
-// x - axis servo
-float centralPosX = 20; // central position (moving 20 degrees in each direction)
+// X-axis servo configuration
+const float centralPosX = 20; // central position (moving 20 degrees in each direction)
 float posX = 20;
 // Boundaries
 const float minPosX = 0;
 const float maxPosX = 40;
 const float deltaX = 0.3; // Positional shift (for smooth servo movements)
 
-// smoothing
+// Step size used for smooth automatic movement towards a target position
 const float delta = 0.5;
 
-// Auto sleep functionality
+// System state flags
 bool isActive = true;
 bool moving = false;
+
+// Current automatic movement target
 float targetX = 20, targetY = 40;
+
+// Current automatic movement target
 unsigned long lastMoveTime = 0;
 const unsigned long TIMEOUT = 10000;
 
-// delay
+// Main loop delay
 int dt = 30;
 
+// EEPROM addresses used for storing the last saved mirror position
 const int ADDR_X = 0;
 const int ADDR_Y = sizeof(posX);
 
+/*
+  Reads the specified analog pin multiple times and returns the averaged value.
+  This helps reduce joystick noise and improves movement stability.
+*/
 int readAveragedAnalog(int pin, int samples = 12)
 {
     long sum = 0;
@@ -64,7 +78,9 @@ int readAveragedAnalog(int pin, int samples = 12)
     return sum / samples;
 }
 
-// Function for getting joystick values
+/*
+  Reads the current joystick X/Y values and switch state.
+*/
 void getJoystickValue()
 {
     xVal = readAveragedAnalog(X_PIN);
@@ -72,7 +88,11 @@ void getJoystickValue()
     switchVal = digitalRead(SWITCH_PIN);
 }
 
-// Function for updating servo positions
+/*
+  Updates servo positions based on manual joystick input.
+  Movement is ignored while the system is performing automatic target movement
+  or during the short unlock delay after automatic positioning.
+*/
 void updateServo()
 {
     if (moving || millis() < joystickUnlockTime)
@@ -80,7 +100,7 @@ void updateServo()
 
     bool moved = false;
 
-    // X-axis movement
+    // Manual X-axis movement
     if (xVal < xStaticMin)
     {
         posX -= deltaX;
@@ -92,12 +112,13 @@ void updateServo()
         moved = true;
     }
 
+    // Clamp X position to allowed range
     if (posX < minPosX)
         posX = minPosX;
     if (posX > maxPosX)
         posX = maxPosX;
 
-    // Y-axis movement
+    // Manual Y-axis movement
     if (yVal < yStaticMin)
     {
         posY += deltaY;
@@ -109,11 +130,13 @@ void updateServo()
         moved = true;
     }
 
+    // Clamp Y position to allowed range
     if (posY < minPosY)
         posY = minPosY;
     if (posY > maxPosY)
         posY = maxPosY;
 
+    // Update activity timer and report position if movement occurred
     if (moved)
     {
         lastMoveTime = millis();
@@ -123,6 +146,10 @@ void updateServo()
     }
 }
 
+/*
+  Smoothly moves the mirror towards the given target position.
+  Movement stops once both axes reach the target within the defined step size.
+*/
 void moveToTarget(float targetX, float targetY)
 {
     if (!moving || !isActive)
@@ -131,7 +158,7 @@ void moveToTarget(float targetX, float targetY)
     bool doneX = false;
     bool doneY = false;
 
-    // Move X towards target
+    // Move X-axis towards target
     if (fabs(posX - targetX) <= delta)
     {
         posX = targetX;
@@ -146,7 +173,7 @@ void moveToTarget(float targetX, float targetY)
         posX -= delta;
     }
 
-    // Move Y towards target
+    // Move Y-axis towards target
     if (fabs(posY - targetY) <= delta)
     {
         posY = targetY;
@@ -161,7 +188,7 @@ void moveToTarget(float targetX, float targetY)
         posY -= delta;
     }
 
-    // Clamp to valid range
+    // Clamp both axes to valid mechanical limits
     if (posX < minPosX)
         posX = minPosX;
     if (posX > maxPosX)
@@ -171,14 +198,15 @@ void moveToTarget(float targetX, float targetY)
     if (posY > maxPosY)
         posY = maxPosY;
 
-    // Keep system awake while moving
+    // Keep the system awake during automatic movement
     lastMoveTime = millis();
 
-    // Send updated position
+    // Send updated position to the host application
     Serial.print(posX);
     Serial.print(" ");
     Serial.println(posY);
 
+    // Finalize movement once both axes have reached the target
     if (doneX && doneY)
     {
         posX = targetX;
@@ -187,13 +215,18 @@ void moveToTarget(float targetX, float targetY)
         Serial.print(" ");
         Serial.println(posY);
         moving = false;
+        // Prevent joystick noise from immediately overriding the target position
         joystickUnlockTime = millis() + 300;
     }
 }
 
+/*
+  Handles automatic servo sleep after inactivity and wakes the system
+  when joystick movement or button input is detected.
+*/
 void checkActivity()
 {
-    // ako je prošlo više od TIMEOUT i serva su aktivna → sleep
+    // Put servos to sleep after inactivity timeout
     if (isActive && millis() - lastMoveTime > TIMEOUT)
     {
         xServo.detach();
@@ -201,7 +234,7 @@ void checkActivity()
         isActive = false;
     }
 
-    // ako su serva neaktivna, a joystick se pomakne ili switch pritisne → wake up
+    // Wake servos on joystick movement or button press
     if (!isActive &&
         (xVal < xStaticMin || xVal > xStaticMax ||
          yVal < yStaticMin || yVal > yStaticMax ||
@@ -215,6 +248,10 @@ void checkActivity()
     }
 }
 
+/*
+  Initializes serial communication, attaches servos, configures I/O pins,
+  and restores the last stored mirror position from EEPROM.
+*/
 void setup()
 {
     Serial.begin(115200);
@@ -233,6 +270,7 @@ void setup()
     EEPROM.get(ADDR_X, storedX);
     EEPROM.get(ADDR_Y, storedY);
 
+    // If EEPROM does not contain valid data, initialize with central positions
     if (isnan(storedX) || isnan(storedY))
     {
         posX = centralPosX;
@@ -249,6 +287,13 @@ void setup()
     lastMoveTime = millis();
 }
 
+/*
+  Main control loop:
+  - processes serial commands from the Python GUI
+  - reads joystick input
+  - handles inactivity and wake-up logic
+  - performs manual or automatic mirror movement
+*/
 void loop()
 {
     if (Serial.available())
@@ -257,6 +302,7 @@ void loop()
         cmd.trim();
         if (cmd.startsWith("INIT"))
         {
+            // INIT -> restore the last saved EEPROM position
             if (cmd.length() == 4)
             {
                 EEPROM.get(ADDR_X, posX);
@@ -264,18 +310,17 @@ void loop()
             }
             else
             {
-                // INIT posX posY → postavi iz poslanih vrijednosti
+                // INIT posX posY -> move to a user-defined target position
                 float x, y;
                 int space1 = cmd.indexOf(' ');
                 int space2 = cmd.indexOf(' ', space1 + 1);
                 x = cmd.substring(space1 + 1, space2).toFloat();
                 y = cmd.substring(space2 + 1).toFloat();
-                // posX = x;
-                // posY = y;
                 moving = true;
                 targetX = x;
                 targetY = y;
             }
+            // Wake the system if necessary
             if (!isActive)
             {
                 xServo.attach(X_SERVO_PIN);
@@ -287,6 +332,7 @@ void loop()
 
         if (cmd.startsWith("DELETE"))
         {
+            // Return mirror to the central position
             moving = true;
             targetX = centralPosX;
             targetY = centralPosY;
@@ -300,15 +346,17 @@ void loop()
         }
         if (cmd.startsWith("SAVE"))
         {
+            // Save current mirror position to EEPROM
             EEPROM.put(ADDR_X, posX);
             EEPROM.put(ADDR_Y, posY);
         }
     }
-    // Getting joystick values
+
+    // Read joystick state and update activity state
     getJoystickValue();
     checkActivity();
 
-    // If joystick is clicked - mirror in central position
+    // Button press returns the mirror to the central position
     if (lastSwitch == 1 && switchVal == 0)
     {
         moving = true;
@@ -316,15 +364,19 @@ void loop()
         targetY = centralPosY;
     }
 
+    // Apply manual or automatic movement logic
     updateServo();
     moveToTarget(targetX, targetY);
 
+    // Output current servo positions if the system is active
     if (isActive)
     {
         xServo.write(posX);
         yServo.write(posY);
     }
 
+    // Store current switch state for edge detection in the next loop iteration
     lastSwitch = switchVal;
+
     delay(dt);
 }
